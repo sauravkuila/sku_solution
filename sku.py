@@ -4,6 +4,9 @@ from tqdm import tqdm
 import os, math, time
 import progressbar
 
+import warnings
+warnings.filterwarnings("ignore")
+
 # ItemsPacked- x*y
 # PackConfig - x
 # TotalPacks - y
@@ -37,15 +40,32 @@ def generate_pack_ratio(df, pack_size):
         pc = df.loc[idx,'PackConfig']
         pack_dict[size] = pc
     print(pack_dict)
-    return df['PackConfig']
+    # return df['PackConfig']
+    return pack_dict
 
 def calculate_minima(df, pack_ratio):
-    df[df['Size'] == 'XS','Size'] = pack_ratio['XS']
-    df[df['Size'] == 'S','Size'] = pack_ratio['S']
-    df[df['Size'] == 'M','Size'] = pack_ratio['M']
-    df[df['Size'] == 'L','Size'] = pack_ratio['L']
-    df[df['Size'] == 'XL','Size'] = pack_ratio['XL']
-    df[df['Size'] == 'XXL','Size'] = pack_ratio['XXL']
+    df['PackConfig'] = 0
+    df['ItemsPacked'] = 0
+    df['LossOfSales'] = df['Qty']
+    df['ExcessInventory'] = 0
+    df['LosEi'] = df['ExcessInventory']+df['LossOfSales']
+    # df[df['Size'] == 'XS','PackConfig'] = pack_ratio['XS']
+    # df[df['Size'] == 'S','PackConfig'] = pack_ratio['S']
+    # df[df['Size'] == 'M','PackConfig'] = pack_ratio['M']
+    # df[df['Size'] == 'L','PackConfig'] = pack_ratio['L']
+    # df[df['Size'] == 'XL','PackConfig'] = pack_ratio['XL']
+    # df[df['Size'] == 'XXL','PackConfig'] = pack_ratio['XXL']
+
+    for idx in df.index:
+        size = df.loc[idx,'Size']
+        df.loc[idx,'PackConfig'] = pack_ratio[size]
+        df.loc[idx,'ItemsPacked'] = df.loc[idx,'PackConfig'] * df.loc[idx,'TotalPacks']
+        df.loc[idx,'LossOfSales'] = max(0, df.loc[idx,'Qty'] - df.loc[idx,'ItemsPacked'])
+        df.loc[idx,'ExcessInventory'] = max(0, df.loc[idx,'ItemsPacked'] - df.loc[idx,'Qty'])
+        df.loc[idx,'LosEi'] = df.loc[idx,'LossOfSales'] + df.loc[idx,'ExcessInventory']
+    # print(df)
+    return df['LosEi'].sum()
+
 
 if __name__ == "__main__":
     print('Starting SKU setup')
@@ -70,9 +90,9 @@ if __name__ == "__main__":
     cs = input('enter the pack size: ')
     #check if size entered was an integer
     try:
-        container_size = int(cs)
-        if container_size < 0:
-            raise(Exception('negative containers cannot be computed'))
+        pack_size = int(cs)
+        if pack_size < 0:
+            raise(Exception('negative pack size cannot be computed'))
     except Exception as e:
         print('case size not integer', e)
         raise(e)
@@ -85,19 +105,46 @@ if __name__ == "__main__":
             dc_df = df[df['DC'] == dc]
             dc_df['TotalPacks'] = 0
             unique_stores = dc_df['Store'].unique()
-            print(unique_stores)
+            # print(unique_stores)
+            ratio_combi = {}
             for store in unique_stores:
                 if pd.isna(store) == False:
                     print('running for store :{0}'.format(store))
                     store_df = dc_df[dc_df['Store'] == store]
                     unique_styles = store_df['Style Color'].unique()
-                    print(unique_styles)
+                    # print(unique_styles)
                     for style in unique_styles:
                         if pd.isna(store) == False:
                             print('running for style :{0}'.format(style))
                             style_df = store_df[store_df['Style Color'] == style]
-                            print(style_df)
-                            pack_ratio = generate_pack_ratio(style_df, container_size)
+                            #find the pack ration for style
+                            pack_ratio = generate_pack_ratio(style_df, pack_size)
+
+                            #calculate the packs required for the style
+                            style_sum = style_df['Qty'].sum()
+                            style_packs = math.floor(style_sum/pack_size)
+                            #update the packs in df
+                            style_df.loc[:,'TotalPacks'] = style_packs
+
+                            #update the new style df to dc df for managing packs for the style for each style-store combination
+                            dc_df[(dc_df['Store'] == store) & (dc_df['Style Color'] == style)] = style_df
+
+                            #save the pack ratio to simulate later
+                            ratio_combi[store+'_'+style] = pack_ratio
+            # print(ratio_combi)
+            # print(dc_df)
+            lowest_minima = dc_df['Qty'].sum()
+            best_pack_ratio = ''
+            #iterate these ratios to calculate the lowest minima in the entire dataset
+            for ratio in ratio_combi:
+                print('calculating minima for {0} with ratio {1}'.format(dc,pack_ratio))
+                pack_ratio = ratio_combi[ratio]
+                minima = calculate_minima(dc_df,pack_ratio)
+                if minima < lowest_minima:
+                    lowest_minima = minima
+                    best_pack_ratio = ratio
+
+            print('lowest minima({0}) best pack ratio is {1} as {2}'.format(lowest_minima,best_pack_ratio,ratio_combi[best_pack_ratio]))
 
                             # style_sum = style_df['Qty'].sum()
                             # print(style_sum)
@@ -109,11 +156,6 @@ if __name__ == "__main__":
                             # print(dc_df)
                             # #apply this ratio to entire stores in dc and calculate minima
                             # #calculate individually total packs needed per style
-                             
-                    
-    style1 = store1[store1['Style Color'] == 'Mens Blue Sparrow Print Grey']
-    print(style1)
-    generate_pack_ratio(style1, container_size)
     
     
 
