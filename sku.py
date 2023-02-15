@@ -31,13 +31,21 @@ def generate_pack_ratio(df, pack_size):
     
     # print(df.loc[:,['Size','PackConfig']])
     pack_dict = {}
-    print(df.loc[:,'Qty'])
+    # print(df.loc[:,'Qty'])
     for idx in df.index:
         size = df.loc[idx,'Size']
         pc = df.loc[idx,'PackConfig']
         pack_dict[size] = pc
     print(pack_dict)
     return df['PackConfig']
+
+def calculate_minima(df, pack_ratio):
+    df[df['Size'] == 'XS','Size'] = pack_ratio['XS']
+    df[df['Size'] == 'S','Size'] = pack_ratio['S']
+    df[df['Size'] == 'M','Size'] = pack_ratio['M']
+    df[df['Size'] == 'L','Size'] = pack_ratio['L']
+    df[df['Size'] == 'XL','Size'] = pack_ratio['XL']
+    df[df['Size'] == 'XXL','Size'] = pack_ratio['XXL']
 
 if __name__ == "__main__":
     print('Starting SKU setup')
@@ -51,14 +59,13 @@ if __name__ == "__main__":
     fileobj = pd.read_excel(src)
 
     #create a dataframe for the columns in observation
-    df = fileobj.loc[:,["Store","Style Color","Qty","Size"]]    
-    df['Product'] = df['Style Color'].astype(str)+'_'+df['Qty'].astype(str)
+    df = fileobj.loc[:,["Store","DC","Style Color","Qty","Size"]]
 
     #for the test, seclude dataframe to store1
     store1 = df[df['Store'] == 'Store 1']
-    totalQty = store1['Qty'].sum()
-    uniqueItems = len(store1)
-    print('unique item demand from store1: ', uniqueItems)
+    # totalQty = store1['Qty'].sum()
+    # uniqueItems = len(store1)
+    # print('unique item demand from store1: ', uniqueItems)
 
     cs = input('enter the pack size: ')
     #check if size entered was an integer
@@ -71,36 +78,42 @@ if __name__ == "__main__":
         raise(e)
 
     # print(store1)
-    unique_stores = df['Store'].unique()
-    for store in unique_stores:
-        if pd.isna(store):
-            print('as')
-    unique_styles = df['Style Color'].unique()
-    print(unique_stores)
-    print(unique_styles)
+    unique_dc = df['DC'].unique()
+    for dc in unique_dc:
+        if pd.isna(dc) == False:
+            print('running for dc :{0}'.format(dc))
+            dc_df = df[df['DC'] == dc]
+            dc_df['TotalPacks'] = 0
+            unique_stores = dc_df['Store'].unique()
+            print(unique_stores)
+            for store in unique_stores:
+                if pd.isna(store) == False:
+                    print('running for store :{0}'.format(store))
+                    store_df = dc_df[dc_df['Store'] == store]
+                    unique_styles = store_df['Style Color'].unique()
+                    print(unique_styles)
+                    for style in unique_styles:
+                        if pd.isna(store) == False:
+                            print('running for style :{0}'.format(style))
+                            style_df = store_df[store_df['Style Color'] == style]
+                            print(style_df)
+                            pack_ratio = generate_pack_ratio(style_df, container_size)
+
+                            # style_sum = style_df['Qty'].sum()
+                            # print(style_sum)
+                            # #ask me later how this works (will take time to explain. in short, filtered dataframe of a filtered dataframe)
+                            # print((dc_df[dc_df['Store'] == store])[(dc_df[dc_df['Store'] == store])['Style Color'] == style])
+                            # ((dc_df[dc_df['Store'] == store])[(dc_df[dc_df['Store'] == store])['Style Color'] == style])['TotalPacks'] = style_sum
+                            # print(dc_df[dc_df['Store'] == store][(dc_df[dc_df['Store'] == store])['Style Color'] == style])
+                            # # dc_df[dc_df[dc_df['Store'] == store]['Style Color'] == style, 'TotalPacks'] = style_df['Qty'].sum()
+                            # print(dc_df)
+                            # #apply this ratio to entire stores in dc and calculate minima
+                            # #calculate individually total packs needed per style
+                             
+                    
     style1 = store1[store1['Style Color'] == 'Mens Blue Sparrow Print Grey']
     print(style1)
     generate_pack_ratio(style1, container_size)
     
     
-    #computing number of containers required
-    # cntr_float = totalQty%container_size
-    # if cntr_float >= 0.7 * container_size:
-    #     containers = math.ceil(totalQty/container_size)
-    # else:
-    #     containers = math.floor(totalQty/container_size)
-    # print('TotalProducts: {0} \t ContainerSize(y): {1} \t TotalContainers: {2}'.format(totalQty, container_size, containers))
-
-    # #very important step, here the assumption is objects are prioritized based on qty from a store
-    # #the sorting can be done based on relevant priority (cost, size, any other combination)
-    # store1 = store1.sort_values(by=['Qty'],ascending=False)
-    # generate_product_container_qty(store1, containers, container_size)
-    # print(store1)
-
-    # minima = store1['LossOfSales'].sum() + store1['ExcessInventory'].sum()
-    # print(minima)
-
-    # # minima = calculate_minima(store1, containers)
-    # # print(store1)
-    # store1.to_excel('store1.xlsx')
 
